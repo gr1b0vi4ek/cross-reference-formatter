@@ -1,0 +1,170 @@
+CRF - Cross Reference Formatter
+Copyright 2026 gr1b0vi4ek
+
+This product includes software developed by third parties:
+
+====================================================================
+1. Python & Tkinter (Python Software Foundation)
+URL: https://python.org
+License: Python Software Foundation License Version 2
+Copyright (c) 2001-2026 Python Software Foundation. All Rights Reserved.
+
+Licensed under the Python Software Foundation License Version 2.
+Full license text is available at: https://python.org
+
+====================================================================
+2. python-docx (1.2.0)
+URL: https://github.com
+License: MIT License
+Copyright (c) 2013 Steve Canny, https://github.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+====================================================================
+3. lxml (6.0.2)
+URL: https://lxml.de
+License: BSD 3-Clause License
+Copyright (c) 2004 Infrae. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are
+met:
+
+  1. Redistributions of source code must retain the above copyright
+     notice, this list of conditions and the following disclaimer.
+
+  2. Redistributions in binary form must reproduce the above copyright
+     notice, this list of conditions and the following disclaimer in
+     the documentation and/or other materials provided with the
+     distribution.
+
+  3. Neither the name of Infrae nor the names of its contributors may
+     be used to endorse or promote products derived from this software
+     without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL INFRAE OR
+CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+====================================================================
+4. typing_extensions (4.15.0)
+URL: https://github.com
+License: Python Software Foundation License Version 2
+Copyright (c) 2001-2026 Python Software Foundation. All Rights Reserved.
+
+Licensed under the Python Software Foundation License Version 2.
+Full license text is available at: https://python.org
+
+====================================================================
+5. Pillow (11.1.0) & Bundled Libraries
+URL: https://github.io
+License: MIT-CMU License (HPND)
+
+The Python Imaging Library (PIL) is:
+    Copyright (c) 1997-2011 by Secret Labs AB
+    Copyright (c) 1995-2011 by Fredrik Lundh and contributors
+
+Pillow is the friendly PIL fork. It is:
+    Copyright (c) 2010-2026 by Jeffrey A. Clark and contributors
+
+Permission to use, copy, modify and distribute this software and its
+documentation for any purpose and without fee is hereby granted,
+provided that the above copyright notice appears in all copies and that
+both that copyright notice and this permission notice appear in supporting
+documentation, and that the name of Secret Labs AB or the author not be
+used in advertising or publicity pertaining to distribution of the software
+without specific, written prior permission.
+
+SECRET LABS AB AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+SOFTWARE, INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS.
+IN NO EVENT SHALL SECRET LABS AB OR THE AUTHOR BE LIABLE FOR ANY SPECIAL,
+INDIRECT OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+
+--- Bundled Components within Pillow ---
+
+* brotli-1.1.0 (MIT License)
+  Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
+  (Distributed under the MIT License terms above).
+
+* freetype-2.13.3 (The FreeType Project License / FTL)
+  Portions of this software are copyright (c) 1996-2002, 2006 by
+  David Turner, Robert Wilhelm, and Werner Lemberg (The FreeType Project,
+  https://freetype.org). All rights reserved.
+
+* harfbuzz-10.1.0 (Old MIT License)
+  Copyright (c) 2010-2022 Google, Inc.; Ebrahim Byagowi; Facebook, Inc.;
+  Mozilla Foundation; Codethink Limited; Nokia Corporation; Keith Stribley;
+  Martin Hosken and SIL International; Chris Wilson; Behdad Esfahbod;
+  Red Hat, Inc.; David Turner and Werner Lemberg; Igalia S.L.; Matthias Clasen;
+  Khaled Hosny; Adobe, Inc; Alexei Podtelezhnikov.
+  Provided "AS IS" without warranty; permission granted to use, copy, modify,
+  and distribute provided the copyright notice appears in all copies.
+
+* lcms2-2.16 (MIT License)
+  Copyright (c) 2023 Marti Maria Saguer.
+  (Distributed under the MIT License terms above).
+
+* libjpeg-turbo-3.1.0 (IJG License & Modified 3-Clause BSD License)
+  This software is based in part on the work of the Independent JPEG Group.
+  Copyright (c) 1991-2020, Thomas G. Lane, Guido Vollbeding.
+  Copyright (c) 2009-2024 D. R. Commander. All Rights Reserved.
+  Copyright (c) 2015 Viktor Szathmary. All Rights Reserved.
+  (Distributed under the IJG and 3-Clause BSD License terms).
+
+* libwebp-1.5.0 (BSD 3-Clause License)
+  Copyright (c) 2010, Google Inc. All rights reserved.
+  (Distributed under the BSD 3-Clause License terms above).
+
+* lpng1644 / libpng (PNG Reference Library License v2)
+  Copyright (c) 1995-2024 The PNG Reference Library Authors; Cosmin Truta;
+  Glenn Randers-Pehrson; Andreas Dilger; Guy Eric Schalnat, Group 42, Inc.
+  Provided "AS IS"; permission granted to use, copy, modify, and distribute
+  provided the origin is not misrepresented and copyright notices are retained.
+
+* openjpeg-2.5.3 (BSD 2-Clause License)
+  Copyright (c) 2002-2014, Universite catholique de Louvain (UCL), Belgium;
+  Professor Benoit Macq; Antonin Descampe; Francois-Olivier Devaux;
+  Herve Drolon; Yannick Verschueren; David Janssens; CNES; CS Systemes.
+  Provided "AS IS"; redistribution permitted retaining copyright and disclaimer.
+
+* tiff-4.6.0 / LibTIFF (LibTIFF License)
+  Copyright (c) 1988-1997 Sam Leffler
+  Copyright (c) 1991-1997 Silicon Graphics, Inc.
+  Provided "AS-IS"; permission granted to use, copy, modify, distribute, and
+  sell provided copyright notices appear and names are not used in advertising.
+
+* xz-5.6.3 (BSD Zero Clause License / 0BSD)
+  This software includes code from XZ Utils (https://tukaani.org).
+  Copyright (c) The XZ Utils authors and contributors.
+
+* zlib-ng-2.2.2 (zlib License)
+  Copyright (c) 1995-2024 Jean-loup Gailly and Mark Adler.
+  Provided "as-is"; permission granted to use, alter, and redistribute freely
+  provided the origin is not misrepresented and this notice is not removed.
