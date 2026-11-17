@@ -5,7 +5,7 @@
 <!-- README-I18N:END -->
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/71665d16-7675-4e93-8e08-214bab781967" alt="Иконка CRF" width="128" />
+  <img src="https://github.com/user-attachments/assets/8da27901-cf41-43f7-b704-85e4b2fb9422" alt="Иконка CRF" width="128" />
 </p>
 
 The tool automates cross-referencing in Word documents. It locates
