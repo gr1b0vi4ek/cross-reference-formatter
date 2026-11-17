@@ -221,3 +221,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project specific
+!build.spec
+crf_config.json
+*_автонумерация.docx
+.idea/
+.vscode/
