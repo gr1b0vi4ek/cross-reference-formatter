@@ -67,22 +67,32 @@ def build_app_ico() -> None:
         return
 
     Image = _ensure_pillow()
+
     images = []
     for size, path in pngs:
         img = Image.open(path).convert("RGBA")
+
         if img.size != (size, size):
-            img = img.resize((size, size), Image.LANCZOS)
-        images.append((size, img))
+            img = img.resize((size, size), Image.Resampling.LANCZOS)
+
+        images.append(img)
         print(f"  [img]  {path.name}  ({size}x{size})")
 
-    _validate_sizes({s for s, _ in images})
+    _validate_sizes({img.width for img in images})
 
-    base = images[0][1]
-    sizes = [s for s, _ in images]
-    base.save(ico_path, format="ICO",
-              sizes=[(s, s) for s in sizes], bitmap_format="bmp")
-    print(f"  [ok]   {ico_path.name}  <- {len(images)} размер(ов): "
-          f"{', '.join(f'{s}x{s}' for s in sizes)}")
+    base = images[0]  # обычно 256x256, т.к. collect_size_pngs сортирует по убыванию
+
+    base.save(
+        ico_path,
+        format="ICO",
+        append_images=images[1:],
+        sizes=[(img.width, img.height) for img in images],
+    )
+
+    print(
+        f"  [ok]   {ico_path.name}  <- {len(images)} размер(ов): "
+        f"{', '.join(f'{img.width}x{img.height}' for img in images)}"
+    )
 
 
 def run_pyinstaller() -> None:
