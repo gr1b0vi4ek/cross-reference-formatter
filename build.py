@@ -1,10 +1,11 @@
-"""Сборка портативного CRF.exe в корень проекта."""
+"""Сборка CRF.exe в корень проекта."""
 
 import os
 import re
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -36,7 +37,7 @@ def collect_size_pngs() -> list[tuple[int, Path]]:
         if m:
             w, h = int(m.group(1)), int(m.group(2))
             if w != h:
-                print(f"  [warn] {path.name}: стороны разные ({w}x{h}), пропускаю")
+                print(f"  {path.name}: стороны не равны ({w}x{h}), пропуск")
                 continue
             found.append((w, path))
     found.sort(key=lambda x: x[0], reverse=True)
@@ -47,10 +48,10 @@ def _validate_sizes(present: set[int]) -> None:
     missing_critical = CRITICAL_SIZES - present
     missing_extra = RECOMMENDED_SIZES - present - CRITICAL_SIZES
     if missing_critical:
-        print(f"  [warn] Нет критических размеров: "
+        print(f"  нет критических размеров: "
               f"{', '.join(f'{s}x{s}' for s in sorted(missing_critical))}")
     if missing_extra:
-        print(f"  [info] Нет опциональных размеров: "
+        print(f"  нет опциональных размеров: "
               f"{', '.join(f'{s}x{s}' for s in sorted(missing_extra))}")
 
 
@@ -58,12 +59,12 @@ def build_app_ico() -> None:
     ico_path = ICONS / "app.ico"
 
     if ico_path.exists():
-        print(f"  [ok]   {ico_path.name} найден - использую как есть")
+        print(f"  {ico_path.name} уже есть")
         return
 
     pngs = collect_size_pngs()
     if not pngs:
-        print("  [skip] Нет ни app.ico, ни PNG с разрешениями - exe без иконки")
+        print("  нет app.ico и PNG с размерами: exe будет без иконки")
         return
 
     Image = _ensure_pillow()
@@ -76,11 +77,11 @@ def build_app_ico() -> None:
             img = img.resize((size, size), Image.Resampling.LANCZOS)
 
         images.append(img)
-        print(f"  [img]  {path.name}  ({size}x{size})")
+        print(f"  {path.name} ({size}x{size})")
 
     _validate_sizes({img.width for img in images})
 
-    base = images[0]  # обычно 256x256, т.к. collect_size_pngs сортирует по убыванию
+    base = images[0]  # 256x256: collect_size_pngs сортирует по убыванию
 
     base.save(
         ico_path,
@@ -90,14 +91,29 @@ def build_app_ico() -> None:
     )
 
     print(
-        f"  [ok]   {ico_path.name}  <- {len(images)} размер(ов): "
+        f"  {ico_path.name}: {len(images)} размер(ов), "
         f"{', '.join(f'{img.width}x{img.height}' for img in images)}"
     )
 
 
+def _remove_dir(path: Path) -> None:
+    for _ in range(5):
+        try:
+            if path.exists():
+                shutil.rmtree(path)
+            return
+        except FileNotFoundError:
+            return
+        except OSError:
+            time.sleep(0.5)
+    shutil.rmtree(path, ignore_errors=True)
+
+
 def run_pyinstaller() -> None:
+    _remove_dir(ROOT / "build")
+    _remove_dir(ROOT / "dist")
     print("\nPyInstaller:")
-    cmd = [sys.executable, "-m", "PyInstaller", "--clean", "build.spec"]
+    cmd = [sys.executable, "-m", "PyInstaller", "build.spec"]
     result = subprocess.run(cmd, cwd=ROOT)
     if result.returncode != 0:
         print(f"\nPyInstaller завершился с кодом {result.returncode}")

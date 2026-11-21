@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# В .spec недоступен __file__; PyInstaller определяет SPECPATH — путь к папке со spec.
+# В spec нет __file__: SPECPATH указывает на папку со spec.
 import os
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
