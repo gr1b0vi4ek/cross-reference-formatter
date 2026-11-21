@@ -25,9 +25,17 @@ as well.
   Numbering is derived from the element's position in the document, so an
   incorrect order in the source is corrected: if "Figure 5" appears before
   "Figure 3", the numbers are re-ordered correctly after processing.
-- Creates bookmarks on every numbered element. Bookmark names are
-  sequential (`Fig_001`, `Fig_002`, …; `Tab_001`, …; `Eq_001`, …;
-  `Src_001`, …), so they appear in ascending order in Word's
+- Supports three numbering modes (selected in the window): continuous
+  (`1`, `2`, `3`), by sections (`2.1`) and by sections and clauses
+  (`2.1.3`). The section number comes from the heading numbering; if the
+  document has no clauses (level-3 headings), the `2.1` format is used.
+- Before numbering the elements, it checks the heading numbering (sections,
+  subsections, clauses) and fixes discrepancies. The problems found are
+  reported in the log, and the heading numbers themselves are corrected.
+- Creates bookmarks on every numbered element. A bookmark name matches the
+  element number: `Fig_002_003` – figure 2.3, `Tab_001_002` – table 1.2.
+  With continuous numbering the names are sequential (`Fig_001`, `Fig_002`,
+  …, `Src_001`, …), so they appear in ascending order in Word's
   "References → Cross-reference → Bookmark" dialog.
 - Finds mentions in the text ("Figure 3", "Table 2.1", "Equation 4",
   "[5]", "[1, 3-5, p. 20]") and replaces them with `REF` fields. For a
@@ -37,9 +45,14 @@ as well.
 - Detects the bibliography section by its heading ("Список литературы",
   "Библиография", "References", etc.), numbers the sources with fields,
   and creates bookmarks on them.
+- Shows the current numbers in cross-references right away: the cached
+  result of `REF` fields is refreshed during processing, so `Ctrl+A` → `F9`
+  is not required just to see the numbers. Empty reference fields left by
+  older versions are removed as well.
 - Idempotent: if the document already contains `SEQ` fields from a
-  previous run, the tool picks up the existing bookmarks instead of
-  duplicating them.
+  previous run, the tool picks up the existing bookmarks, repairs the ones
+  that drifted away from their fields, and renames them to match the
+  current numbers.
 
 ## About references in the source text
 
@@ -62,10 +75,14 @@ ascending order, and the right one takes a couple of seconds to find.
 2. Pick a `.docx`.
 3. In the top-right corner, set the document language – `ru` or `en`.
    This determines which captions and headings the tool will look for.
-4. Click "Process & Save". A copy with the `_autonumbering` suffix will
+4. Choose the numbering of figures, tables, and equations: continuous
+   (`1, 2, 3`), by sections (`1.1`) or by sections and clauses (`1.1.1`).
+   The choice is remembered and applied on the next launch.
+5. Click "Process & Save". A copy with the `_autonumbering` suffix will
    appear next to the original file.
-5. Open the copy in Word, press `Ctrl+A` then `F9` – Word recomputes all
-   fields and fills in the current numbers.
+6. Open the copy in Word. The numbers in cross-references are already up
+   to date; `Ctrl+A` and `F9` are only needed for a full field update
+   (for example, after editing the text manually).
 
 To check a document without modifying it, click "Check Only (No Save)":
 the tool runs through all stages and reports results in the log, but
