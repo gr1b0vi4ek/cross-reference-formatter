@@ -5,7 +5,7 @@ import re
 from . import i18n
 
 
-NUM_PART = r'\d+(?:\.\d+)?'
+NUM_PART = r'\d+(?:\.\d+)*'
 DASH = r'[-\u2010\u2011\u2012\u2013\u2014\u2015\u2212]'
 
 NUM_LIST = (NUM_PART +

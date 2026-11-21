@@ -25,6 +25,10 @@ def _get_config_path() -> Path:
 
 CONFIG_FILE = _get_config_path()
 
+# Режимы нумерации: global – 1, 2, 3; section – 2.1; clause – 2.1.3.
+NUM_MODES = ('global', 'section', 'clause')
+current_num_mode = 'global'
+
 
 def load_config() -> dict:
     try:

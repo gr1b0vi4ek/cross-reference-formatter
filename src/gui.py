@@ -10,9 +10,9 @@ from pathlib import Path
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import tkinter.font as tkfont
 
-from . import i18n
+from . import config, i18n
 from .i18n import tr
-from .config import load_config, save_config
+from .config import NUM_MODES, load_config, save_config
 from .processor import process_document
 
 
@@ -48,6 +48,9 @@ class CrossReferencerApp(tk.Tk):
         cfg = load_config()
         i18n.current_ui_lang = cfg.get('ui_lang', 'ru')
         i18n.current_doc_lang = cfg.get('doc_lang', 'ru')
+        saved_mode = cfg.get('num_mode', 'global')
+        config.current_num_mode = (saved_mode if saved_mode in NUM_MODES
+                                   else 'global')
 
         self.geometry("960x760")
         self.minsize(720, 560)
@@ -118,6 +121,22 @@ class CrossReferencerApp(tk.Tk):
         self.btn_select = ttk.Button(row, command=self.choose_file)
         self.btn_select.pack(side='left', padx=(8, 0))
 
+        num_row = ttk.Frame(self.ff)
+        num_row.pack(fill='x', padx=8, pady=(0, 2))
+
+        self.lbl_num_mode = ttk.Label(num_row)
+        self.lbl_num_mode.pack(side='left')
+
+        self.num_mode_var = tk.StringVar()
+        self.cb_num_mode = ttk.Combobox(
+            num_row, textvariable=self.num_mode_var, state='readonly', width=32)
+        self.cb_num_mode.pack(side='left', padx=(6, 0))
+        self.cb_num_mode.bind('<<ComboboxSelected>>', self._on_num_mode_change)
+
+        self.lbl_num_hint = ttk.Label(
+            self.ff, foreground='#777', wraplength=930, font=('Segoe UI', 8))
+        self.lbl_num_hint.pack(anchor='w', padx=8, pady=(0, 6))
+
         self.result_var = tk.StringVar()
         self.lbl_result = ttk.Label(self.ff, textvariable=self.result_var,
                                     foreground='#0a5', wraplength=930)
@@ -173,6 +192,17 @@ class CrossReferencerApp(tk.Tk):
         self.btn_exit.configure(text=tr('btn_exit'))
         self.lf.configure(text=tr('log_frame'))
 
+        self.lbl_num_mode.configure(text=tr('num_label'))
+        num_values = [tr('num_mode_global'), tr('num_mode_section'),
+                      tr('num_mode_clause')]
+        self.cb_num_mode.configure(values=num_values)
+        try:
+            num_idx = NUM_MODES.index(config.current_num_mode)
+        except ValueError:
+            num_idx = 0
+        self.cb_num_mode.set(num_values[num_idx])
+        self.lbl_num_hint.configure(text=tr('num_hint'))
+
         self.lbl_hint_f9.configure(text=tr('hint_f9'))
         self.lbl_hint_ref.configure(text=tr('hint_ref'))
 
@@ -191,6 +221,18 @@ class CrossReferencerApp(tk.Tk):
         i18n.current_doc_lang = self.doc_lang_var.get()
         cfg = load_config()
         cfg['doc_lang'] = i18n.current_doc_lang
+        save_config(cfg)
+
+    def _on_num_mode_change(self, event=None):
+        num_values = [tr('num_mode_global'), tr('num_mode_section'),
+                      tr('num_mode_clause')]
+        try:
+            config.current_num_mode = NUM_MODES[
+                num_values.index(self.num_mode_var.get())]
+        except ValueError:
+            config.current_num_mode = 'global'
+        cfg = load_config()
+        cfg['num_mode'] = config.current_num_mode
         save_config(cfg)
 
     def log(self, key=None, raw_text=None, **kwargs):
@@ -264,7 +306,8 @@ class CrossReferencerApp(tk.Tk):
         def worker():
             try:
                 stats = process_document(
-                    self.input_path, output, log=self.log, dry_run=dry_run)
+                    self.input_path, output, log=self.log, dry_run=dry_run,
+                    num_mode=config.current_num_mode)
                 self.after(0, self._on_success, output, stats, dry_run)
             except Exception as e:
                 self.after(0, self._on_error, e)

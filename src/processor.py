@@ -4,23 +4,38 @@ import re
 
 from docx import Document
 from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
-from . import i18n
+from . import config, i18n
+from .config import NUM_MODES
 from .patterns import (
     get_caption_re, get_fig_ref_re, get_tab_ref_re, get_eq_ref_re,
     get_bib_heading_re, normalize_num, NUM_PART,
     SRC_REF_RE, BIB_END_RE, BIB_HEADING_RE_RU, BIB_HEADING_RE_EN,
     TOC_LINE_RE, MATH_SYMBOLS,
 )
+from .numbering import (
+    HeadingPlan, ElementNumbering, fix_heading_numbers, log_heading_issues,
+)
 from .docx_utils import (
-    make_run, make_field_runs, make_bookmark_start, make_bookmark_end,
+    make_run, make_field_runs, make_prefix_field,
+    make_bookmark_start, make_bookmark_end,
     find_overlapping_runs, copy_run_formatting,
-    rPr_at_position, replace_span, _find_existing_bookmark,
-    get_max_bookmark_id,
+    rPr_at_position, replace_span, get_max_bookmark_id,
+    collect_bookmark_names, unique_bookmark_name, existing_field_ranges,
+    sync_field_bookmarks, renumber_bookmarks, _rename_field_targets,
+    apply_desired_names, repair_field_bookmarks, refresh_element_prefix,
+    drop_empty_ref_fields, refresh_ref_results, caption_number_rPr,
+    number_prefix, bookmark_base_for, seq_instruction,
 )
 
 
-def process_caption(paragraph, bm_counter, seq_name, prefix, seq_pos, log):
+def process_caption(paragraph, bm_counter, seq_name, prefix, numbering, log,
+                    used_names=None, desired=None):
+    """Пронумеровать подпись рисунка/таблицы.
+
+    desired – «имя закладки -> имя по номеру элемента».
+    """
     m = get_caption_re().match(paragraph.text)
     if not m:
         return None, None, bm_counter, None
@@ -32,30 +47,46 @@ def process_caption(paragraph, bm_counter, seq_name, prefix, seq_pos, log):
         is_figure = label.startswith('рис')
     seq = 'Figure' if is_figure else 'Table'
     pfx = 'Fig' if is_figure else 'Tab'
+    kind = 'figure' if is_figure else 'table'
 
-    orig_num = re.match(r'^(\d+(?:\.\d+)?)', m.group(2))
-    num_str = orig_num.group(1) if orig_num else m.group(2)
+    num_str, parts, depth, scope_key = numbering.peek(paragraph, pfx)
+    bm_base = bookmark_base_for(pfx, num_str)
+    last = num_str.rsplit('.', 1)[-1]
+    pre = number_prefix(parts)
+    needle = f'SEQ {seq}'
 
-    if f'SEQ {seq}' in paragraph._p.xml:
-        bm = _find_existing_bookmark(paragraph, pfx + '_')
-        return bm, str(seq_pos), bm_counter, 'figure' if is_figure else 'table'
+    if needle in paragraph._p.xml:
+        names, bm_counter = sync_field_bookmarks(
+            paragraph, needle, pfx + '_', [bm_base], bm_counter, used_names)
+        bm = names[0] if names else None
+        if not bm:
+            return None, None, bm_counter, None
+        rPr = caption_number_rPr(paragraph, m.start(2))
+        refresh_element_prefix(paragraph, pfx, needle, parts, last,
+                               rPr=rPr, depth=depth)
+        if desired is not None:
+            desired[bm] = bm_base
+        numbering.commit(pfx, scope_key)
+        return bm, num_str, bm_counter, kind
 
     num_start, num_end = m.start(2), m.end(2)
     overlap = find_overlapping_runs(paragraph, num_start, num_end)
     if not overlap:
         return None, None, bm_counter, None
-    rPr = copy_run_formatting(overlap[0][2])
+    # Шрифт номера как у текста подписи.
+    rPr = caption_number_rPr(paragraph, num_start)
 
-    bm_name = f'{pfx}_{seq_pos:03d}'
-    instr = f'SEQ {seq} \\* ARABIC'
-    elements = [
-        make_bookmark_start(bm_name, bm_counter),
-        *make_field_runs(instr, str(seq_pos), rPr),
-        make_bookmark_end(bm_counter),
-    ]
+    bm_name = unique_bookmark_name(bm_base, used_names)
+    elements = [make_bookmark_start(bm_name, bm_counter)]
+    elements.extend(make_prefix_field(pre, rPr))
+    elements.extend(make_field_runs(seq_instruction(seq, depth), last, rPr))
+    elements.append(make_bookmark_end(bm_counter))
     if not replace_span(paragraph, num_start, num_end, elements):
         return None, None, bm_counter, None
-    return bm_name, str(seq_pos), bm_counter + 1, 'figure' if is_figure else 'table'
+    if desired is not None:
+        desired[bm_name] = bm_base
+    numbering.commit(pfx, scope_key)
+    return bm_name, num_str, bm_counter + 1, kind
 
 
 def _full_text(paragraph):
@@ -72,7 +103,7 @@ def _find_number(paragraph):
         m = re.search(r'\(\s*(' + NUM_PART + r')\s*\)\s*$', text_w)
         if m:
             return m.group(1), 'paren', 'wt'
-        m = re.search(r'(?<![\wА-Яеа-яе])(' + NUM_PART + r')\s*$', text_w)
+        m = re.search(r'(?<![\wА-Яеа-яе])(' + NUM_PART + r')\.?\s*$', text_w)
         if m:
             return m.group(1), 'bare', 'wt'
     full = _full_text(paragraph)
@@ -80,7 +111,7 @@ def _find_number(paragraph):
         m = re.search(r'\(\s*(' + NUM_PART + r')\s*\)\s*$', full)
         if m:
             return m.group(1), 'paren', 'mt'
-        m = re.search(r'(?<![\wА-Яеа-яе])(' + NUM_PART + r')\s*$', full)
+        m = re.search(r'(?<![\wА-Яеа-яе])(' + NUM_PART + r')\.?\s*$', full)
         if m:
             return m.group(1), 'bare', 'mt'
     return None, None, None
@@ -120,40 +151,65 @@ def _remove_omml_suffix(paragraph, num, kind):
     return False
 
 
-def process_formula(paragraph, bm_counter, bm_eq, eq_seq, log):
-    if 'SEQ Equation' in paragraph._p.xml:
-        bm = _find_existing_bookmark(paragraph, 'Eq_')
-        return bm, str(eq_seq), bm_counter
+def process_formula(paragraph, bm_counter, bm_eq, log, used_names=None,
+                    numbering=None, desired=None):
+    """Пронумеровать формулу в тексте (до или после формулы, «(1)» или «1»)."""
+    needle = 'SEQ Equation'
+    if needle in paragraph._p.xml:
+        num_str, parts, depth, scope_key = numbering.peek(paragraph, 'Eq')
+        bm_base = bookmark_base_for('Eq', num_str)
+        names, bm_counter = sync_field_bookmarks(
+            paragraph, needle, 'Eq_', [bm_base], bm_counter, used_names)
+        bm = names[0] if names else None
+        if not bm:
+            return None, None, bm_counter
+        refresh_element_prefix(paragraph, 'Eq', needle, parts,
+                               num_str.rsplit('.', 1)[-1], depth=depth)
+        if desired is not None:
+            desired[bm] = bm_base
+        numbering.commit('Eq', scope_key)
+        bm_eq[num_str] = bm
+        return bm, num_str, bm_counter
 
     num, kind, source = _find_number(paragraph)
     if not num:
         return None, None, bm_counter
 
-    bm_name = f'Eq_{eq_seq:03d}'
-    instr = 'SEQ Equation \\* ARABIC'
+    num_str, parts, depth, scope_key = numbering.peek(paragraph, 'Eq')
+    bm_base = bookmark_base_for('Eq', num_str)
+    bm_name = unique_bookmark_name(bm_base, used_names)
+    last = num_str.rsplit('.', 1)[-1]
+    pre = number_prefix(parts)
+    instr = seq_instruction('Equation', depth)
 
     if source == 'wt':
         text_w = paragraph.text
         if kind == 'paren':
             m = re.search(r'\(\s*(' + re.escape(num) + r')\s*\)\s*$', text_w)
         else:
-            m = re.search(r'(?<![\wА-Яеа-яе])(' + re.escape(num) + r')\s*$', text_w)
+            m = re.search(r'(?<![\wА-Яеа-яе])(' + re.escape(num) + r')\.?\s*$',
+                          text_w)
         if not m:
             return None, None, bm_counter
-        s, e = m.start(1), m.end(1)
+        if kind == 'paren':
+            s, e = m.start(1), m.end(1)
+        else:
+            s, e = m.start(1), m.end(0)
         overlap = find_overlapping_runs(paragraph, s, e)
         if not overlap:
             return None, None, bm_counter
         rPr = copy_run_formatting(overlap[0][2])
-        elements = [
-            make_bookmark_start(bm_name, bm_counter),
-            *make_field_runs(instr, str(eq_seq), rPr),
-            make_bookmark_end(bm_counter),
-        ]
+        elements = [make_bookmark_start(bm_name, bm_counter)]
+        elements.extend(make_prefix_field(pre, rPr))
+        elements.extend(make_field_runs(instr, last, rPr))
+        elements.append(make_bookmark_end(bm_counter))
         if not replace_span(paragraph, s, e, elements):
             return None, None, bm_counter
-        bm_eq[str(eq_seq)] = bm_name
-        return bm_name, str(eq_seq), bm_counter + 1
+        if desired is not None:
+            desired[bm_name] = bm_base
+        numbering.commit('Eq', scope_key)
+        bm_eq[num_str] = bm_name
+        return bm_name, num_str, bm_counter + 1
 
     if not _remove_omml_suffix(paragraph, num, kind):
         return None, None, bm_counter
@@ -164,19 +220,28 @@ def process_formula(paragraph, bm_counter, bm_eq, eq_seq, log):
         return None, None, bm_counter
     elements = [make_run(' (' if kind == 'paren' else ' ')]
     elements.append(make_bookmark_start(bm_name, bm_counter))
-    elements.extend(make_field_runs(instr, str(eq_seq)))
+    elements.extend(make_prefix_field(pre))
+    elements.extend(make_field_runs(instr, last))
     elements.append(make_bookmark_end(bm_counter))
     if kind == 'paren':
         elements.append(make_run(')'))
     anchor = parent_oMath
     for el in elements:
         anchor.addnext(el); anchor = el
-    bm_eq[str(eq_seq)] = bm_name
-    return bm_name, str(eq_seq), bm_counter + 1
+    if desired is not None:
+        desired[bm_name] = bm_base
+    numbering.commit('Eq', scope_key)
+    bm_eq[num_str] = bm_name
+    return bm_name, num_str, bm_counter + 1
 
 
-def process_formula_tables(doc, bm_counter, bm_eq, eq_seq, log):
-    for tbl_idx, table in enumerate(doc.tables):
+def collect_formula_table_rows(doc):
+    """Формулы в таблицах: формула слева, номер справа.
+
+    Возвращает {элемент абзаца с номером: (номер, вид)}; документ не меняет.
+    """
+    rows = {}
+    for table in doc.tables:
         try:
             if len(table.columns) < 2:
                 continue
@@ -193,39 +258,62 @@ def process_formula_tables(doc, bm_counter, bm_eq, eq_seq, log):
             rt = right.text.strip()
             m = re.match(r'^\(\s*(' + NUM_PART + r')\s*\)$', rt)
             if m:
-                num_str, kind = m.group(1), 'paren'
+                num_orig, kind = m.group(1), 'paren'
             else:
                 m = re.match(r'^(' + NUM_PART + r')$', rt)
                 if not m:
                     continue
-                num_str, kind = m.group(1), 'bare'
+                num_orig, kind = m.group(1), 'bare'
             has_omml = 'oMath' in left._tc.xml
             has_math = any(c in left.text for c in MATH_SYMBOLS)
             if not (has_omml or has_math):
                 continue
             if not right.paragraphs:
                 continue
-            para = right.paragraphs[0]
-            if 'SEQ Equation' in para._p.xml:
-                continue
-            idx = para.text.rfind(num_str)
-            if idx < 0:
-                continue
+            rows[right.paragraphs[0]._p] = (num_orig, kind)
+    return rows
 
-            bm_name = f'Eq_{eq_seq:03d}'
-            rPr = rPr_at_position(para, idx)
-            elements = [
-                make_bookmark_start(bm_name, bm_counter),
-                *make_field_runs('SEQ Equation \\* ARABIC',
-                                 str(eq_seq), rPr),
-                make_bookmark_end(bm_counter),
-            ]
-            if not replace_span(para, idx, idx + len(num_str), elements):
-                continue
-            bm_eq[str(eq_seq)] = bm_name
-            eq_seq += 1
-            bm_counter += 1
-    return bm_counter, eq_seq
+
+def process_table_formula(paragraph, num_orig, kind, bm_counter, bm_eq,
+                          numbering, log, used_names=None, desired=None):
+    """Пронумеровать формулу таблицы (номер в правой ячейке)."""
+    num_str, parts, depth, scope_key = numbering.peek(paragraph, 'Eq')
+    bm_base = bookmark_base_for('Eq', num_str)
+    last = num_str.rsplit('.', 1)[-1]
+    pre = number_prefix(parts)
+
+    if 'SEQ Equation' in paragraph._p.xml:
+        names, bm_counter = sync_field_bookmarks(
+            paragraph, 'SEQ Equation', 'Eq_', [bm_base], bm_counter, used_names)
+        bm = names[0] if names else None
+        if not bm:
+            return bm_counter
+        refresh_element_prefix(paragraph, 'Eq', 'SEQ Equation', parts, last,
+                               depth=depth)
+        if desired is not None:
+            desired[bm] = bm_base
+        numbering.commit('Eq', scope_key)
+        bm_eq[num_str] = bm
+        return bm_counter
+
+    idx = paragraph.text.rfind(num_orig)
+    if idx < 0:
+        return bm_counter
+
+    bm_name = unique_bookmark_name(bm_base, used_names)
+    rPr = rPr_at_position(paragraph, idx)
+    elements = [make_bookmark_start(bm_name, bm_counter)]
+    elements.extend(make_prefix_field(pre, rPr))
+    elements.extend(make_field_runs(
+        seq_instruction('Equation', depth), last, rPr))
+    elements.append(make_bookmark_end(bm_counter))
+    if not replace_span(paragraph, idx, idx + len(num_orig), elements):
+        return bm_counter
+    if desired is not None:
+        desired[bm_name] = bm_base
+    numbering.commit('Eq', scope_key)
+    bm_eq[num_str] = bm_name
+    return bm_counter + 1
 
 
 def _has_numPr(paragraph):
@@ -277,7 +365,8 @@ def _read_num_format(doc, paragraph):
     return None
 
 
-def _replace_numPr_with_seq(doc, paragraph, bm_counter, bm_map, src_pos, log):
+def _replace_numPr_with_seq(doc, paragraph, bm_counter, bm_map, src_pos, log,
+                            used_names=None):
     parts = _read_num_format(doc, paragraph)
     if not parts:
         parts = ['', '.\u00a0']
@@ -288,7 +377,7 @@ def _replace_numPr_with_seq(doc, paragraph, bm_counter, bm_map, src_pos, log):
     numPr = pPr.find(qn('w:numPr'))
     pPr.remove(numPr)
     key = str(src_pos)
-    bm_name = f'Src_{src_pos:03d}'
+    bm_name = unique_bookmark_name(f'Src_{src_pos:03d}', used_names)
     elements = []
     if parts[0]:
         elements.append(make_run(parts[0]))
@@ -360,7 +449,7 @@ def _find_bib_items(text):
     return results
 
 
-def process_bibliography(doc, bm_counter, log=print):
+def process_bibliography(doc, bm_counter, log=print, used_names=None):
     bm_map = {}
     in_bib = bib_started = False
     src_pos = 1
@@ -401,16 +490,22 @@ def process_bibliography(doc, bm_counter, log=print):
             continue
 
         if 'SEQ Source' in para._p.xml:
-            bm = _find_existing_bookmark(para, 'Src_')
-            if bm:
+            # По одной закладке на поле SEQ Source: недостающие создаются,
+            # лишние удаляются.
+            names, bm_counter = sync_field_bookmarks(
+                para, 'SEQ Source', 'Src_',
+                lambda k: f'Src_{src_pos + k:03d}',
+                bm_counter, used_names)
+            for bm in names:
                 bm_map[str(src_pos)] = bm
                 items += 1
-            src_pos += 1
+                src_pos += 1
             continue
 
         if _has_numPr(para):
             bm_counter = _replace_numPr_with_seq(
-                doc, para, bm_counter, bm_map, src_pos, log)
+                doc, para, bm_counter, bm_map, src_pos, log,
+                used_names=used_names)
             items += 1
             src_pos += 1
             continue
@@ -428,7 +523,7 @@ def process_bibliography(doc, bm_counter, log=print):
 
         for s, e_ext, prefix, suffix, num_str, pos in reversed(plan):
             rPr = rPr_at_position(para, s)
-            bm_name = f'Src_{pos:03d}'
+            bm_name = unique_bookmark_name(f'Src_{pos:03d}', used_names)
 
             elements = []
             if prefix:
@@ -455,15 +550,27 @@ def _resolve_key(key, bm_map):
     if key in bm_map:
         return bm_map[key]
     try:
-        norm = str(int(key))
+        num = int(key)
+        norm = str(num)
     except ValueError:
-        norm = None
+        num, norm = None, None
     if norm and norm in bm_map:
         return bm_map[norm]
     for k in bm_map:
         if k.startswith(key + '_'):
             return bm_map[k]
+    # «рисунок 3» при нумерации 2.1-стилем: третий рисунок по порядку.
+    if num is not None and 1 <= num <= len(bm_map):
+        return bm_map[list(bm_map)[num - 1]]
     return None
+
+
+def _real_key(bm_name, bm_map, default=None):
+    """Ключ (номер), под которым закладка записана в карте номеров."""
+    for k, v in bm_map.items():
+        if v == bm_name:
+            return k
+    return default
 
 
 def build_number_refs(num_str, bm_map, rPr, placeholder=None):
@@ -483,13 +590,17 @@ def build_number_refs(num_str, bm_map, rPr, placeholder=None):
         bm2 = _resolve_key(k2, bm_map)
         if bm1 and bm2:
             sep = '-'
-            sm = re.search(r'\d+(?:\.\d+)?(\s*[-–—−]\s*)\d+(?:\.\d+)?', num_str)
+            sm = re.search(
+                NUM_PART + r'(\s*[-\u2013\u2014\u2212]\s*)' + NUM_PART,
+                num_str)
             if sm:
                 sep = sm.group(1)
             return [
-                *make_field_runs(f'REF {bm1} \\h', k1, rPr),
+                *make_field_runs(f'REF {bm1} \\h',
+                                 _real_key(bm1, bm_map, k1), rPr),
                 make_run(sep, rPr),
-                *make_field_runs(f'REF {bm2} \\h', k2, rPr),
+                *make_field_runs(f'REF {bm2} \\h',
+                                 _real_key(bm2, bm_map, k2), rPr),
             ]
         return None
 
@@ -499,20 +610,22 @@ def build_number_refs(num_str, bm_map, rPr, placeholder=None):
         if parts and all(bookmarks):
             elems = []
             sep = ', '
-            sm = re.search(r'\d+(?:\.\d+)?(\s*,\s*)\d+(?:\.\d+)?', num_str)
+            sm = re.search(NUM_PART + r'(\s*,\s*)' + NUM_PART, num_str)
             if sm:
                 sep = sm.group(1)
             for i, p in enumerate(parts):
                 if i > 0:
                     elems.append(make_run(sep, rPr))
-                elems.extend(
-                    make_field_runs(f'REF {bookmarks[i]} \\h', p, rPr))
+                elems.extend(make_field_runs(
+                    f'REF {bookmarks[i]} \\h',
+                    _real_key(bookmarks[i], bm_map, p), rPr))
             return elems
         return None
 
     bm = _resolve_key(normalized, bm_map)
     if bm:
-        return make_field_runs(f'REF {bm} \\h', placeholder, rPr)
+        return make_field_runs(
+            f'REF {bm} \\h', _real_key(bm, bm_map, placeholder), rPr)
     return None
 
 
@@ -595,12 +708,20 @@ def process_references(paragraph, bm_fig, bm_tab, bm_eq, bm_src,
     if get_caption_re().match(text):
         skip_fig_tab_eq = True
 
+    # Готовые поля Word не трогаем: иначе REF/SEQ вкладываются в них.
+    field_ranges = existing_field_ranges(paragraph)
+
+    def in_field(s, e):
+        return any(s < fe and fs < e for fs, fe in field_ranges)
+
     replacements = []
 
     def collect(regex, bm_map, kind):
         for m in regex.finditer(text):
             num_str = m.group('num')
             s, e = m.start('num'), m.end('num')
+            if in_field(s, e):
+                continue
             rPr = rPr_at_position(paragraph, s)
             elems = build_number_refs(num_str, bm_map, rPr, placeholder=num_str)
             if elems:
@@ -614,6 +735,8 @@ def process_references(paragraph, bm_fig, bm_tab, bm_eq, bm_src,
     for m in SRC_REF_RE.finditer(text):
         inner = m.group(1)
         s, e = m.start(1), m.end(1)
+        if in_field(s, e):
+            continue
         rPr = rPr_at_position(paragraph, s)
         elems, reason = build_source_refs(inner, bm_src, rPr)
         if elems:
@@ -634,31 +757,45 @@ def process_references(paragraph, bm_fig, bm_tab, bm_eq, bm_src,
     return made
 
 
-def process_document(input_path, output_path, log=print, dry_run=False):
+def process_document(input_path, output_path, log=print, dry_run=False,
+                     num_mode=None):
     doc = Document(input_path)
+    mode = num_mode if num_mode in NUM_MODES else config.current_num_mode
+    moved, removed = repair_field_bookmarks(doc)
+    if moved or removed:
+        log('log_repaired', moved=moved, removed=removed)
     counter = get_max_bookmark_id(doc) + 1
+    used_names = collect_bookmark_names(doc)
     bm_fig, bm_tab, bm_eq, bm_src = {}, {}, {}, {}
     element_paras = set()
-
-    fig_seq = 1
-    tab_seq = 1
-    eq_seq = 1
+    desired = {}
 
     log('log_start', name="CRF/ФПС", path=input_path)
 
-    all_paras = list(doc.paragraphs)
-    seen_p = {id(p._p) for p in all_paras}
-    for tbl in doc.tables:
-        for row in tbl.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    if id(p._p) not in seen_p:
-                        seen_p.add(id(p._p))
-                        all_paras.append(p)
+    # Абзацы в порядке документа, включая ячейки таблиц.
+    all_paras = [Paragraph(p_el, doc._body)
+                 for p_el in doc.element.body.iter(qn('w:p'))]
     log('log_paragraphs', count=len(all_paras))
 
+    # Нумерация заголовков проверяется до элементов: номера считаются
+    # по исправленной структуре.
+    log('log_head_check')
+    plan = HeadingPlan(doc)
+    log('log_head_total', count=plan.count)
+    log_heading_issues(plan, log)
+    head_fixed = 0
+    if any(kind == 'wrong' for kind, *_rest in plan.issues):
+        if dry_run:
+            log('log_head_keep')
+        else:
+            head_fixed = fix_heading_numbers(plan)
+            log('log_head_fixed', count=head_fixed)
+
+    numbering = ElementNumbering(doc, mode, log=log, plan=plan)
+    log(f'log_num_{numbering.mode}')
+
     log('log_step1a')
-    counter, eq_seq = process_formula_tables(doc, counter, bm_eq, eq_seq, log=log)
+    table_formulas = collect_formula_table_rows(doc)
 
     log('log_step1b')
     n_paras = 0
@@ -666,40 +803,49 @@ def process_document(input_path, output_path, log=print, dry_run=False):
     for para in all_paras:
         n_paras += 1
         text = para.text
+        p_el = para._p
 
-        if caption_re.match(text):
-            label = caption_re.match(text).group(1).lower()
+        if p_el in table_formulas:
+            num_orig, kind = table_formulas[p_el]
+            counter = process_table_formula(
+                para, num_orig, kind, counter, bm_eq, numbering, log=log,
+                used_names=used_names, desired=desired)
+            element_paras.add(id(p_el))
+            continue
+
+        m_caption = caption_re.match(text)
+        if m_caption:
+            label = m_caption.group(1).lower()
             if i18n.current_doc_lang == 'en':
                 is_fig = 'fig' in label
             else:
                 is_fig = label.startswith('рис')
             seq_name = 'Figure' if is_fig else 'Table'
             prefix = 'Fig' if is_fig else 'Tab'
-            seq_pos = fig_seq if is_fig else tab_seq
 
             bm, key, counter, kind = process_caption(
-                para, counter, seq_name, prefix, seq_pos, log)
+                para, counter, seq_name, prefix, numbering, log,
+                used_names=used_names, desired=desired)
             if bm and key:
                 if is_fig:
                     bm_fig[key] = bm
-                    fig_seq += 1
                 else:
                     bm_tab[key] = bm
-                    tab_seq += 1
-                element_paras.add(id(para._p))
+                element_paras.add(id(p_el))
             continue
 
         if is_formula_paragraph(para):
             bm, key, counter = process_formula(
-                para, counter, bm_eq, eq_seq, log=log)
-            if bm and key:
-                eq_seq += 1
-                element_paras.add(id(para._p))
+                para, counter, bm_eq, log=log, used_names=used_names,
+                numbering=numbering, desired=desired)
+            if key is not None and bm:
+                element_paras.add(id(p_el))
 
     log('log_found_stats', figs=len(bm_fig), tabs=len(bm_tab), eqs=len(bm_eq))
 
     log('log_step2')
-    bm_src, counter = process_bibliography(doc, counter, log=log)
+    bm_src, counter = process_bibliography(doc, counter, log=log,
+                                           used_names=used_names)
 
     log('log_step3')
     total_refs = 0
@@ -710,7 +856,28 @@ def process_document(input_path, output_path, log=print, dry_run=False):
             skip_fig_tab_eq=skip, log=log)
     log('log_total_refs', refs=total_refs)
 
+    # Имена закладок по номерам элементов: Fig_002_003 для рисунка 2.3.
+    rename = {}
+    apply_desired_names(doc, desired, rename)
+    if numbering.mode == 'global':
+        renamed = renumber_bookmarks(doc, rename=rename)
+    else:
+        # В режиме по разделам порядковые имена Fig_001 разрушают иерархию,
+        # поэтому пересчитываются только источники (они всегда сквозные).
+        renamed = renumber_bookmarks(doc, prefixes=('Src',), rename=rename)
+    _rename_field_targets(doc, rename)
+    if renamed:
+        log('log_renamed', count=renamed)
+
     if not dry_run:
+        # В полях REF показан кэш результата: обновляем его без F9.
+        dropped = drop_empty_ref_fields(doc)
+        if dropped:
+            log('log_ref_dropped', count=dropped)
+        refreshed = refresh_ref_results(doc)
+        if refreshed:
+            log('log_ref_refreshed', count=refreshed)
+
         try:
             doc.save(output_path)
             log('log_saved', path=output_path)
@@ -723,4 +890,5 @@ def process_document(input_path, output_path, log=print, dry_run=False):
         'figures': len(bm_fig), 'tables': len(bm_tab),
         'equations': len(bm_eq), 'sources': len(bm_src),
         'paragraphs': n_paras, 'refs': total_refs,
+        'head_fixed': head_fixed,
     }
